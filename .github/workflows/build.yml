@@ -8,12 +8,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
-      - uses: android-actions/setup-android@v3
-      - run: gradle assembleDebug --stacktrace
+      - name: Setup Android SDK & Gradle
+        run: |
+          sudo apt-get update && sudo apt-get install -y gradle
+          yes | /usr/local/lib/android/sdk/cmdline-tools/latest/bin/sdkmanager --sdk_root=/usr/local/lib/android/sdk "platforms;android-34" "build-tools;34.0.0" > /dev/null
+      - name: Build Debug APK
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+        run: gradle assembleDebug --stacktrace
       - uses: actions/upload-artifact@v4
         with:
           name: app-debug-apk
