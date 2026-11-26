@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kuis FT Pribadi</title>
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f4f6f9;
+      color: #1f2937;
+      margin: 0;
+      padding: 16px;
+    }
+    .box {
+      max-width: 640px;
+      margin: 0 auto;
+      background: #ffffff;
+      border-radius: 12px;
+      padding: 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+    }
+    h1 {
+      font-size: 20px;
+      margin: 0 0 12px;
+    }
+    .meta {
+      font-size: 13px;
+      color: #6b7280;
+      margin-bottom: 16px;
+    }
+    .soal {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 14px;
+      line-height: 1.5;
+    }
+    .opsi {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    button.btn-opsi {
+      text-align: left;
+      padding: 12px 14px;
+      border: 1px solid #d1d5db;
+      border-radius: 8px;
+      background: #fff;
+      font-size: 15px;
+      cursor: pointer;
+    }
+    button.btn-opsi:hover {
+      background: #f9fafb;
+    }
+    button.btn-opsi.benar {
+      background: #dcfce7;
+      border-color: #16a34a;
+      color: #14532d;
+      font-weight: 600;
+    }
+    button.btn-opsi.salah {
+      background: #fee2e2;
+      border-color: #dc2626;
+      color: #7f1d1d;
+    }
+    .nav {
+      margin-top: 18px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+    button.btn-utama {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 8px;
+      background: #2563eb;
+      color: #fff;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .skor {
+      font-size: 18px;
+      font-weight: 700;
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="box" id="app">
+    <h1>Memuat soal...</h1>
+    <div class="meta">Mengambil data dari bank_soal.json</div>
+  </div>
+
+  <script>
+    const app = document.getElementById("app");
+    let soalList = [];
+    let idx = 0;
+    let skor = 0;
+    let sudahJawab = false;
+
+    async function muatSoal() {
+      try {
+        const res = await fetch("./bank_soal.json?v=" + Date.now());
+        if (!res.ok) throw new Error("Gagal memuat bank_soal.json");
+        const data = await res.json();
+        soalList = Array.isArray(data) ? data : (data.soal || data.questions || []);
+        if (!soalList.length) throw new Error("Daftar soal kosong");
+        tampilSoal();
+      } catch (err) {
+        app.innerHTML = `
+          <h1>Belum bisa memuat soal</h1>
+          <div class="meta">${err.message}</div>
+          <p>Pastikan file <b>bank_soal.json</b> ada di folder utama repo dan format JSON-nya valid.</p>
+        `;
+      }
+    }
+
+    function ambilTeksSoal(item) {
+      return item.pertanyaan || item.soal || item.question || item.tanya || "Soal tanpa teks";
+    }
+
+    function ambilPilihan(item) {
+      if (Array.isArray(item.pilihan)) return item.pilihan;
+      if (Array.isArray(item.opsi)) return item.opsi;
+      if (Array.isArray(item.options)) return item.options;
+      return ["A", "B", "C", "D"];
+    }
+
+    function cekJawabanBenar(item, pilihan, indexPilihan) {
+      const kunci = item.jawaban ?? item.kunci ?? item.answer;
+      if (typeof kunci === "number") return kunci === indexPilihan;
+      if (typeof kunci === "string") {
+        const huruf = ["A", "B", "C", "D", "E"][indexPilihan];
+        const k = kunci.trim().toUpperCase();
+        const p = String(pilihan).trim().toUpperCase();
+        return k === huruf || p === k || p.startsWith(k + ".") || p.startsWith(k + ")");
+      }
+      return false;
+    }
+
+    function tampilSoal() {
+      if (idx >= soalList.length) {
+        app.innerHTML = `
+          <h1>Selesai!</h1>
+          <div class="skor">Skor kamu: ${skor} / ${soalList.length}</div>
+          <button class="btn-utama" onclick="ulangKuis()">Ulangi Kuis</button>
+        `;
+        return;
+      }
+
+      sudahJawab = false;
+      const item = soalList[idx];
+      const teks = ambilTeksSoal(item);
+      const opsi = ambilPilihan(item);
+
+      let htmlOpsi = "";
+      opsi.forEach((p, i) => {
+        const labelHuruf = ["A", "B", "C", "D", "E"][i] || (i + 1);
+        htmlOpsi += `<button class="btn-opsi" onclick="jawab(${i}, this)"><b>${labelHuruf}.</b> ${p}</button>`;
+      });
+
+      app.innerHTML = `
+        <div class="meta">Soal ${idx + 1} dari ${soalList.length} • Skor: ${skor}</div>
+        <div class="soal">${teks}</div>
+        <div class="opsi">${htmlOpsi}</div>
+        <div class="nav">
+          <span class="meta" id="status-jawab"></span>
+          <button class="btn-utama" onclick="berikutnya()">${idx + 1 === soalList.length ? "Lihat Hasil" : "Soal Berikutnya"}</button>
+        </div>
+      `;
+    }
+
+    window.jawab = function(i, btn) {
+      if (sudahJawab) return;
+      sudahJawab = true;
+
+      const item = soalList[idx];
+      const opsi = ambilPilihan(item);
+      const benar = cekJawabanBenar(item, opsi[i], i);
+      const statusEl = document.getElementById("status-jawab");
+      const semuaBtn = document.querySelectorAll(".btn-opsi");
+
+      semuaBtn.forEach((b, index) => {
+        if (cekJawabanBenar(item, opsi[index], index)) {
+          b.classList.add("benar");
+        }
+      });
+
+      if (benar) {
+        skor++;
+        btn.classList.add("benar");
+        statusEl.textContent = "Jawaban benar!";
+      } else {
+        btn.classList.add("salah");
+        statusEl.textContent = "Kurang tepat.";
+      }
+    };
+
+    window.berikutnya = function() {
+      idx++;
+      tampilSoal();
+    };
+
+    window.ulangKuis = function() {
+      idx = 0;
+      skor = 0;
+      tampilSoal();
+    };
+
+    muatSoal();
+  </script>
+</body>
+</html>
